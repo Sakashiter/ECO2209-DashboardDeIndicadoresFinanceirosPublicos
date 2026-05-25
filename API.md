@@ -1,6 +1,0 @@
-# API Utilizadas
-BCB Dados Abertos: https://dadosabertos.bcb.gov.br/dataset/ir-10664513000150
-
-AwesomeAPI Câmbio: https://docs.awesomeapi.com.br/api-de-moedas
-
-B3 CDB: https://developers.b3.com.br/api-details?apiId=6437786e-85d5-4236-a2c1-6390d7ad06b4&managerId=1&swaggerVersion=2.0&type=rest&usage=api&Itemid=171#overview
