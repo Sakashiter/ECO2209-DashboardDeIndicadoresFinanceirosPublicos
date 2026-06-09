@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+
+//iniciando
 void main() {
   runApp(
     ChangeNotifierProvider(
@@ -10,7 +12,7 @@ void main() {
   );
 }
 
-//Modelo
+//Modelo (ficha em branco)
 
 class IndicadorEconomico {
   final String titulo;
@@ -35,7 +37,7 @@ class ControleIndicadores extends ChangeNotifier {
   ];
 
   //Getter (protege o encapsulamento da original)
-  List<IndicadorEconomico> get listaIndicadores => _dadosIndicadores;
+  List<IndicadorEconomico> get listaIndicadores => _dadosIndicadores; //porta trancada, ninguém de fora pode alterar o valor
 
   //Método simulado (Vou implementar o http para a api)
   void exportarRelatorioCSV() {
@@ -44,7 +46,7 @@ class ControleIndicadores extends ChangeNotifier {
 }
 
 
-// Iniciação da interface
+// Iniciação da interface (escolha de cor(rosa))
 
 class AplicativoDashboard extends StatelessWidget {
   const AplicativoDashboard({super.key});
@@ -82,8 +84,8 @@ class TelaDashboard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Consumindo o estado global através do Provider (Injeção de Dependência) ???????????????????????
-    final provedorDados = Provider.of<ControleIndicadores>(context);
+    // Consumindo o estado global através do Provider (Injeção de Dependência)
+    final provedorDados = Provider.of<ControleIndicadores>(context); //tela não cria os dados, ela só "pede emprestado"
 
     return Scaffold(
       appBar: AppBar(
@@ -117,13 +119,13 @@ class TelaDashboard extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             
-            // Renderização dinâmica (map) ??????????????????????????
+            // Renderização dinâmica (map) 
             Row(
               children: provedorDados.listaIndicadores
-                  .map<Widget>((item) => CartaoIndicador(indicador: item))
+                  .map<Widget>((item) => CartaoIndicador(indicador: item)) 
                   .toList(),
             ),
-            
+//pega a sua lista do estoque e lê item por item            
             const SizedBox(height: 30),
             const Text(
               'Histórico de Variação', 
@@ -131,12 +133,12 @@ class TelaDashboard extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             
-            // Container representando o Mockup do Gráfico Interativo
+            //onde o gráfico real vai ficar quando o sistema estiver pronto
             Container(
               height: 250,
               width: double.infinity,
               decoration: BoxDecoration(
-                color: const Color(0xFFFFF0F3), // Fundo rosa extremamente suave
+                color: const Color(0xFFFFF0F3), 
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: const Color(0xFFFFCCD5)),
               ),
@@ -159,7 +161,7 @@ class TelaDashboard extends StatelessWidget {
               ),
             ),
             
-            const SizedBox(height: 30),
+            const SizedBox(height: 30), //visual caixa
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
@@ -179,7 +181,7 @@ class TelaDashboard extends StatelessWidget {
   }
 }
 
-//Componente reutilizável
+// (componente reutilizável - desenho dos quadradinhos)
 
 class CartaoIndicador extends StatelessWidget {
   final IndicadorEconomico indicador;
