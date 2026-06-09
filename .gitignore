@@ -1,0 +1,17 @@
+# Rust
+/target/
+Cargo.lock
+
+# Go
+/go/bin/
+*.exe
+
+# Flutter/Dart
+/build/
+.dart_tool/
+.packages
+
+# Geral
+.env
+*.log
+__pycache__
