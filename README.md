@@ -1,9 +1,9 @@
 ECO12209 - Dashboard de Indicadores Financeiros Públicos 
 
-Eduardo Antônio Lameira dos Anjos - 2024014417 - d2024014417@unifei.edu.br
-Gabriela Portugal Rocha Lopes - 2024009471 - d2024009471@unifei.edu.br
-Felipe Scannavino Sakashita - 2024013278 - d2024013278@unifei.edu.br
-Otávio Limade Andrade - 2024003487 - d2024003487@unifei.edu.br
+# Eduardo Antônio Lameira dos Anjos - 2024014417 - d2024014417@unifei.edu.br
+# Gabriela Portugal Rocha Lopes - 2024009471 - d2024009471@unifei.edu.br
+# Felipe Scannavino Sakashita - 2024013278 - d2024013278@unifei.edu.br
+# Otávio Limade Andrade - 2024003487 - d2024003487@unifei.edu.br
 
 ## 🎯 Objetivo do Projeto
 
