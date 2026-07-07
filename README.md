@@ -1,144 +1,86 @@
-## ECO12209 - Dashboard de Indicadores Financeiros Públicos 
+# 📊 Dashboard de Indicadores Financeiros Públicos
 
-### Eduardo Antônio Lameira dos Anjos - 2024014417 - d2024014417@unifei.edu.br
-### Felipe Scannavino Sakashita - 2024013278 - d2024013278@unifei.edu.br
-### Gabriela Portugal Rocha Lopes - 2024009471 - d2024009471@unifei.edu.br
-### Otávio Limade Andrade - 2024003487 - d2024003487@unifei.edu.br
+Este repositório contém o código-fonte do projeto prático (Tema 5) da disciplina **ECO12209 - Linguagens de Programação** da Universidade Federal de Itajubá (UNIFEI - Campus Itabira).
 
-## 🎯 Objetivo do Projeto
-
-Este projeto foi desenvolvido como trabalho prático para a disciplina **ECO12209 - Linguagens de Programação** no curso de **Engenharia de Computação** da **UNIFEI (Universidade Federal de Itajubá) - Campus Itabira** , sob a orientação do Prof. Walter Aoiama Nagai.
-
-O propósito fundamental é a criação de uma aplicação funcional poliglota que integra três linguagens de programação diferentes — **Rust**, **Go** e **Dart** — para solucionar um problema real utilizando APIs abertas com dados atualizados em tempo real ou quase real. O sistema funciona como um painel analítico gerencial focado em indicadores macroeconômicos, auxiliando na transparência, agilidade e fundamentação de decisões administrativas no setor público.
+O objetivo central do sistema é fornecer uma ferramenta consolidada para o acompanhamento ágil de índices econômicos críticos (como IPCA, Selic e Câmbio), auxiliando a tomada de decisão técnica na gestão pública e promovendo a transparência por meio de dados abertos.
 
 ---
 
-## 🏗️ Arquitetura e Divisão por Linguagem
+## 🏗️ Arquitetura Poliglota
 
-O ecossistema segue uma separação rigorosa de responsabilidades técnicas por camadas:
+O projeto foi desenvolvido sob uma arquitetura de serviços descentralizados, explorando três paradigmas distintos e complementares para extrair o máximo de desempenho de cada tecnologia:
 
-* 
-**Módulo de Coleta (Rust):** Responsável pela extração periódica e assíncrona de dados brutos diretamente das APIs públicas do Banco Central e AwesomeAPI. A linguagem foi escolhida pelo alto desempenho e segurança de memória em tempo de compilação.
+* **Módulo de Coleta (Rust):** Responsável pelo "trabalho pesado" de consumo de APIs externas. Utiliza rotinas assíncronas (`reqwest`, `tokio`) para buscar variações cambiais e indexadores em tempo real, garantindo velocidade, tolerância a falhas e segurança de memória.
+* **Servidor e API RESTful (Go):** Atua como a camada central de orquestração. Expõe rotas para a aplicação cliente, processa requisições em alta concorrência (usando *goroutines*) e fornece os dados consolidados em formato JSON.
+* **Interface Gráfica (Dart/Flutter):** Focado na experiência do usuário (Frontend). Apresenta um painel visual responsivo e dinâmico, exibindo gráficos de variação temporal e painéis de métricas atualizados via requisições HTTP à API Go.
 
+---
 
-* 
-**API Gateway e Orquestração (Go):** Atua como o servidor back-end encarregado de gerenciar as rotas, estruturar regras de cache local, controlar acessos e expor os dados tratados em formato RESTful para o cliente. Também suporta a exportação de relatórios em formato CSV.
+## 📡 Fontes de Dados (APIs Públicas)
 
+O sistema consome dados verídicos em tempo real através dos seguintes *endpoints*:
 
-* 
-**Interface Gráfica (Dart / Flutter):** Responsável pela camada de apresentação e experiência visual do usuário. Renderiza gráficos interativos de séries temporais correspondentes aos últimos 12 meses e exibe alertas coloridos baseados em thresholds de variação crítica.
-
+| Indicador | Provedor / API | Justificativa |
+| :--- | :--- | :--- |
+| **Dólar (USD-BRL)** | AwesomeAPI | Métrica global crítica para transações e importações. |
+| **Taxa Selic** | SGS / Banco Central | Principal instrumento de controle inflacionário. |
+| **IPCA Mensal** | SGS / Banco Central | Indexador essencial para contratos públicos e de mercado. |
 
 ---
 
 ## 📁 Estrutura do Repositório
 
-A organização de pastas do repositório foi padronizada conforme a seguinte árvore de diretórios:
+O código está organizado em domínios isolados para facilitar a manutenção:
 
-```text
-├── Dart/               # Aplicação Flutter para visualização e interface gráfica
-│   ├── lib/main.dart   # Ponto de entrada do frontend
-│   └── pubspec.yaml    # Gerenciador de dependências do Dart
-├── GO/                 # Servidor de orquestração e API REST em Go
-│   └── Documentação/   # Notas de especificação das rotas e endpoints
-├── Rust/               # Módulo de ingestão e parsing de dados em Rust 
-│   ├── src/main.rs     # Script assíncrono de coleta das APIs
-│   ├── Cargo.toml      # Manifesto de configuração do Cargo
-│   └── Cargo.lock      # Travamento de versões de dependências
-├── docs/               # Documentos e apresentações do projeto (LaTeX, PDFs) 
-└── .gitignore          # Arquivo de omissão de artefatos de compilação e chaves locais
-
-```
+* `/Rust/`: Aplicação de coleta de dados e manifestos Cargo.
+* `/GO/`: Lógica de roteamento web e serviços REST.
+* `/Dart/`: Componentes visuais e controle de estado do aplicativo Flutter.
 
 ---
 
-## 🌐 Fontes de Dados e APIs Mapeadas
+## 🐳 Como Executar o Projeto
 
-O protótipo inicial realiza chamadas estáveis para capturar métricas reais das seguintes fontes governamentais gratuitas:
+O backend do projeto (Rust e Go) foi conteinerizado utilizando **Docker** para garantir a consistência do ambiente de desenvolvimento e facilitar o *deploy*.
 
-1. 
-**Dólar Comercial (AwesomeAPI):** Endpoint público de consulta de cotações de moedas cambiais (`/json/last/USD-BRL`).
+**Pré-requisitos:**
+* [Docker](https://docs.docker.com/get-docker/) e [Docker Compose](https://docs.docker.com/compose/install/) instalados.
+* [Flutter SDK](https://docs.flutter.dev/get-started/install) instalado (para rodar o frontend).
 
+**Passo a passo:**
 
-2. 
-**Meta SELIC (SGS / Banco Central do Brasil):** Série temporal oficial de número **432** que monitora a taxa básica de juros determinada pelo COPOM.
-
-
-3. 
-**IPCA Mensal (SGS / Banco Central do Brasil):** Série temporal oficial de número **433** utilizada como o indexador oficial da inflação do país.
-
----
-
-## 🚀 Como Executar o Protótipo Inicial
-
-A inicialização e execução dos módulos locais do projeto devem respeitar a ordem lógica apresentada abaixo:
-
-### 1. Iniciar o Coletor (Rust)
-
-Navegue até a pasta raiz do submódulo Rust e execute as rotinas de compilação e ingestão:
-
+1. Clone este repositório para sua máquina local.
+2. Navegue até a raiz do projeto (onde está localizado o arquivo `docker-compose.yml`).
+3. Suba os serviços de backend executando o comando abaixo:
 ```bash
-cd Rust
-cargo run
+docker-compose up --build -d
 
 ```
 
-### 2. Inicializar o Servidor de API (Go)
-
-Acesse a pasta de backend para disponibilizar os endpoints locais de orquestração:
-
-```bash
-cd GO
-go run main.go
-
-```
-
-### 3. Executar o Frontend (Flutter/Dart)
-
-Com o ambiente cliente ativo e um dispositivo ou emulador conectado, carregue a interface visual:
+4. Verifique se os containers subiram corretamente e se a API está respondendo.
+5. Em um novo terminal, navegue até a pasta do frontend:
 
 ```bash
 cd Dart
+
+```
+
+6. Instale as dependências do Flutter e execute o aplicativo:
+
+```bash
+flutter pub get
 flutter run
 
 ```
 
 ---
 
-## 🤖 Uso Ético de IA
+## 👥 Equipe Discente
 
-O uso de ferramentas de Inteligência Artificial Generativa no escopo do projeto obedeceu estritamente aos princípios de integridade acadêmica estipulados pela universidade:
+* Eduardo Antônio Lameira dos Anjos
+* Felipe Scannavino Sakashita
+* Gabriela Portugal Rocha Lopes
+* Otávio Lima de Andrade
 
-* 
-**Transparência:** A IA foi utilizada de modo responsável unicamente como suporte auxiliar para a aceleração de boilerplates estruturais, sintaxe de manifestos de compilação e esquemas de configuração de ambientes.
+**Docente responsável:** Prof. Walter Aoiama Nagai
 
-
-* 
-**Autonomia e Autoria:** Toda a lógica de comunicação inter-processos, o mapeamento arquitetural e o fluxo de regras de negócio foram projetados integralmente de forma original pelo grupo.
-
-
-
----
-
-## 🛠️ Boas Práticas de Governança (Git)
-
-O controle de versão e os commits no repositório utilizam critérios padronizados de engenharia de software:
-
-* 
-**Conventional Commits:** Mensagens padronizadas no formato `tipo(escopo): descrição` com verbos descritos no imperativo (ex: `feat(coleta): adiciona parsing de JSON`).
-
-
-* 
-**Atomicidade:** Commits frequentes contendo apenas uma única mudança lógica por modificação para blindar o histórico contra revisões massivas e mistas.
-
-
-* 
-**Isolamento de Arquivos (.gitignore):** Omissão obrigatória de pastas locais pesadas resultantes de builds (`/target/`, `/build/`) e credenciais privadas (`.env`).
-
-
-
----
-
-## 📄 Licença
-
-Projeto estritamente acadêmico, pedagógico e sem fins lucrativos.
+```
