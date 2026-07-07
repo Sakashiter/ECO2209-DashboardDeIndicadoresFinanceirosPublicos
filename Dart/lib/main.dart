@@ -32,12 +32,94 @@ class PontoHistorico {
   });
 }
 
+double converterParaDouble(dynamic valor) {
+  if (valor is num) {
+    return valor.toDouble();
+  }
+
+  return double.parse(
+    valor.toString().replaceAll(',', '.'),
+  );
+}
+
+class AlertaIndicador {
+  final String nivel;
+  final String mensagem;
+
+  AlertaIndicador({
+    required this.nivel,
+    required this.mensagem,
+  });
+
+  factory AlertaIndicador.fromJson(Map<String, dynamic> json) {
+    return AlertaIndicador(
+      nivel: json['nivel']?.toString() ?? 'normal',
+      mensagem: json['mensagem']?.toString() ??
+          'Indicador dentro do limite definido.',
+    );
+  }
+}
+
+class IndicadorAtual {
+  final double valor;
+  final DateTime data;
+  final String fonte;
+  final AlertaIndicador alerta;
+
+  IndicadorAtual({
+    required this.valor,
+    required this.data,
+    required this.fonte,
+    required this.alerta,
+  });
+
+  factory IndicadorAtual.fromJson(Map<String, dynamic> json) {
+    final alertaJson = json['alerta'] is Map
+        ? Map<String, dynamic>.from(json['alerta'] as Map)
+        : <String, dynamic>{};
+
+    return IndicadorAtual(
+      valor: converterParaDouble(json['valor']),
+      data: DateTime.parse(json['data'].toString()),
+      fonte: json['fonte']?.toString() ?? 'Fonte não informada',
+      alerta: AlertaIndicador.fromJson(alertaJson),
+    );
+  }
+}
+
+class IndicadoresAtuais {
+  final IndicadorAtual ipca;
+  final IndicadorAtual selic;
+  final IndicadorAtual dolar;
+
+  IndicadoresAtuais({
+    required this.ipca,
+    required this.selic,
+    required this.dolar,
+  });
+
+  factory IndicadoresAtuais.fromJson(Map<String, dynamic> json) {
+    return IndicadoresAtuais(
+      ipca: IndicadorAtual.fromJson(
+        Map<String, dynamic>.from(json['ipca'] as Map),
+      ),
+      selic: IndicadorAtual.fromJson(
+        Map<String, dynamic>.from(json['selic'] as Map),
+      ),
+      dolar: IndicadorAtual.fromJson(
+        Map<String, dynamic>.from(json['dolar'] as Map),
+      ),
+    );
+  }
+}
+
 class IndicadorEconomico {
   final String titulo;
   final String valor;
   final Color corTema;
   final IconData icone;
   final String descricao;
+  final String nivelAlerta;
 
   IndicadorEconomico({
     required this.titulo,
@@ -45,93 +127,100 @@ class IndicadorEconomico {
     required this.corTema,
     required this.icone,
     required this.descricao,
+    required this.nivelAlerta,
   });
 }
 
+Color corDoAlerta(String nivel) {
+  switch (nivel.toLowerCase()) {
+    case 'critico':
+      return const Color(0xFFC62828);
+    case 'atencao':
+      return const Color(0xFFEF6C00);
+    default:
+      return const Color(0xFF2E7D32);
+  }
+}
+
+String textoDoAlerta(String nivel) {
+  switch (nivel.toLowerCase()) {
+    case 'critico':
+      return 'CRÍTICO';
+    case 'atencao':
+      return 'ATENÇÃO';
+    default:
+      return 'NORMAL';
+  }
+}
+
 class ApiService {
-  static const String urlIpca =
-      'https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados/ultimos/12?formato=json';
+  static const String baseUrl = 'http://localhost:8080/api';
 
-  static String criarUrlSelic() {
-    final hoje = DateTime.now();
-    final inicio = DateTime(hoje.year - 2, hoje.month, hoje.day);
-
-    String formatarData(DateTime data) {
-      final dia = data.day.toString().padLeft(2, '0');
-      final mes = data.month.toString().padLeft(2, '0');
-      return '$dia/$mes/${data.year}';
-    }
-
-    return 'https://api.bcb.gov.br/dados/serie/bcdata.sgs.1178/dados?formato=json&dataInicial=${formatarData(inicio)}&dataFinal=${formatarData(hoje)}';
-  }
-
-  static const String urlDolar =
-      'https://economia.awesomeapi.com.br/json/daily/USD-BRL/12';
-
-  Future<List<PontoHistorico>> buscarHistoricoBcb(
-    String url, {
-    bool usarUltimoValorDoMes = false,
-  }) async {
-    final resposta = await http.get(Uri.parse(url));
+  Future<IndicadoresAtuais> buscarIndicadores() async {
+    final resposta = await http.get(
+      Uri.parse('$baseUrl/indicadores'),
+    );
 
     if (resposta.statusCode != 200) {
-      throw Exception('Não foi possível obter os dados do Banco Central.');
+      throw Exception('Não foi possível buscar os indicadores.');
+    }
+
+    final dados = jsonDecode(resposta.body) as Map<String, dynamic>;
+
+    return IndicadoresAtuais.fromJson(dados);
+  }
+
+  Future<List<PontoHistorico>> buscarHistorico(
+    String indicador,
+  ) async {
+    final resposta = await http.get(
+      Uri.parse('$baseUrl/historico/$indicador'),
+    );
+
+    if (resposta.statusCode != 200) {
+      throw Exception('Não foi possível buscar o histórico.');
     }
 
     final dados = jsonDecode(resposta.body) as List<dynamic>;
 
-    final resultado = dados.map((item) {
-      final partesData = item['data'].toString().split('/');
+    final pontos = dados.map((item) {
+      final json = Map<String, dynamic>.from(item as Map);
 
       return PontoHistorico(
-        data: DateTime(
-          int.parse(partesData[2]),
-          int.parse(partesData[1]),
-          int.parse(partesData[0]),
-        ),
-        valor: double.parse(
-          item['valor'].toString().replaceAll(',', '.'),
-        ),
+        data: DateTime.parse(json['data'].toString()),
+        valor: converterParaDouble(json['valor']),
       );
     }).toList();
 
-    resultado.sort((a, b) => a.data.compareTo(b.data));
+    pontos.sort((a, b) => a.data.compareTo(b.data));
 
-    if (!usarUltimoValorDoMes) {
-      return resultado;
-    }
-
-    final valoresMensais = <String, PontoHistorico>{};
-
-    for (final ponto in resultado) {
-      final chave = '${ponto.data.year}-${ponto.data.month}';
-      valoresMensais[chave] = ponto;
-    }
-
-    return valoresMensais.values.toList();
+    return pontos;
   }
 
-  Future<List<PontoHistorico>> buscarHistoricoDolar() async {
-    final resposta = await http.get(Uri.parse(urlDolar));
+  Future<void> baixarCsv() async {
+    final resposta = await http.get(
+      Uri.parse('$baseUrl/relatorios/csv'),
+    );
 
     if (resposta.statusCode != 200) {
-      throw Exception('Não foi possível obter os dados da AwesomeAPI.');
+      throw Exception('Não foi possível gerar o CSV.');
     }
 
-    final dados = jsonDecode(resposta.body) as List<dynamic>;
+    final arquivo = html.Blob(
+      [resposta.bodyBytes],
+      'text/csv;charset=utf-8',
+    );
 
-    final resultado = dados.map((item) {
-      final timestamp = int.parse(item['timestamp'].toString());
+    final url = html.Url.createObjectUrlFromBlob(arquivo);
 
-      return PontoHistorico(
-        data: DateTime.fromMillisecondsSinceEpoch(timestamp * 1000),
-        valor: double.parse(item['bid'].toString()),
-      );
-    }).toList();
+    html.AnchorElement(href: url)
+      ..setAttribute(
+        'download',
+        'relatorio_indicadores_financeiros.csv',
+      )
+      ..click();
 
-    resultado.sort((a, b) => a.data.compareTo(b.data));
-
-    return resultado;
+    html.Url.revokeObjectUrl(url);
   }
 }
 
@@ -142,6 +231,10 @@ class ControleIndicadores extends ChangeNotifier {
   List<PontoHistorico> _historicoSelic = [];
   List<PontoHistorico> _historicoDolar = [];
 
+  IndicadorAtual? _ipca;
+  IndicadorAtual? _selic;
+  IndicadorAtual? _dolar;
+
   bool _carregando = false;
   TipoGrafico _tipoGrafico = TipoGrafico.ipca;
   String _mensagemStatus = 'Aguardando atualização dos dados.';
@@ -151,6 +244,8 @@ class ControleIndicadores extends ChangeNotifier {
   String get mensagemStatus => _mensagemStatus;
 
   TipoGrafico get tipoGrafico => _tipoGrafico;
+
+  bool get linhaEmDegraus => _tipoGrafico == TipoGrafico.selic;
 
   List<PontoHistorico> get historicoSelecionado {
     switch (_tipoGrafico) {
@@ -196,89 +291,90 @@ class ControleIndicadores extends ChangeNotifier {
   }
 
   List<IndicadorEconomico> get listaIndicadores {
-    final ipca = _historicoIpca.isNotEmpty ? _historicoIpca.last.valor : null;
-    final selic =
-        _historicoSelic.isNotEmpty ? _historicoSelic.last.valor : null;
-    final dolar =
-        _historicoDolar.isNotEmpty ? _historicoDolar.last.valor : null;
-
     return [
-      IndicadorEconomico(
+      _montarIndicador(
         titulo: 'IPCA',
-        valor: ipca == null ? 'Indisponível' : '${ipca.toStringAsFixed(2)}%',
-        corTema: const Color(0xFFD2143A),
+        indicador: _ipca,
         icone: Icons.trending_up,
-        descricao: ipca == null
-            ? 'Dados não recebidos da API.'
-            : 'Fonte: Banco Central.',
+        moeda: false,
       ),
-      IndicadorEconomico(
+      _montarIndicador(
         titulo: 'Taxa Selic',
-        valor:
-            selic == null ? 'Indisponível' : '${selic.toStringAsFixed(2)}%',
-        corTema: const Color(0xFFE05275),
+        indicador: _selic,
         icone: Icons.account_balance,
-        descricao: selic == null
-            ? 'Dados não recebidos da API.'
-            : 'Fonte: Banco Central.',
+        moeda: false,
       ),
-      IndicadorEconomico(
+      _montarIndicador(
         titulo: 'Dólar',
-        valor: dolar == null
-            ? 'Indisponível'
-            : 'R\$ ${dolar.toStringAsFixed(2).replaceAll('.', ',')}',
-        corTema: const Color(0xFFAD1457),
+        indicador: _dolar,
         icone: Icons.attach_money,
-        descricao: dolar == null
-            ? 'Dados não recebidos da API.'
-            : 'Fonte: AwesomeAPI.',
+        moeda: true,
       ),
     ];
   }
 
+  IndicadorEconomico _montarIndicador({
+    required String titulo,
+    required IndicadorAtual? indicador,
+    required IconData icone,
+    required bool moeda,
+  }) {
+    if (indicador == null) {
+      return IndicadorEconomico(
+        titulo: titulo,
+        valor: 'Indisponível',
+        corTema: const Color(0xFF757575),
+        icone: icone,
+        descricao: 'Não foi possível receber esse dado pelo servidor Go.',
+        nivelAlerta: 'indisponivel',
+      );
+    }
+
+    final valor = moeda
+        ? 'R\$ ${indicador.valor.toStringAsFixed(2).replaceAll('.', ',')}'
+        : '${indicador.valor.toStringAsFixed(2)}%';
+
+    return IndicadorEconomico(
+      titulo: titulo,
+      valor: valor,
+      corTema: corDoAlerta(indicador.alerta.nivel),
+      icone: icone,
+      descricao: '${indicador.alerta.mensagem} Fonte: ${indicador.fonte}.',
+      nivelAlerta: indicador.alerta.nivel,
+    );
+  }
+
   Future<void> atualizarIndicadores() async {
     _carregando = true;
-    _mensagemStatus = 'Consultando APIs públicas...';
+    _mensagemStatus = 'Consultando os dados pelo servidor Go...';
     notifyListeners();
 
-    final erros = <String>[];
-
     try {
-      _historicoIpca = await _apiService.buscarHistoricoBcb(ApiService.urlIpca);
+      final resultados = await Future.wait([
+        _apiService.buscarIndicadores(),
+        _apiService.buscarHistorico('ipca'),
+        _apiService.buscarHistorico('selic'),
+        _apiService.buscarHistorico('dolar'),
+      ]);
+
+      final indicadores = resultados[0] as IndicadoresAtuais;
+
+      _ipca = indicadores.ipca;
+      _selic = indicadores.selic;
+      _dolar = indicadores.dolar;
+
+      _historicoIpca = resultados[1] as List<PontoHistorico>;
+      _historicoSelic = resultados[2] as List<PontoHistorico>;
+      _historicoDolar = resultados[3] as List<PontoHistorico>;
+
+      _mensagemStatus = 'Dados recebidos pelo API Gateway em Go.';
     } catch (_) {
-      _historicoIpca = [];
-      erros.add('IPCA');
-    }
-
-    try {
-      _historicoSelic = await _apiService.buscarHistoricoBcb(
-        ApiService.criarUrlSelic(),
-        usarUltimoValorDoMes: true,
-      );
-    } catch (_) {
-      _historicoSelic = [];
-      erros.add('Selic');
-    }
-
-    try {
-      _historicoDolar = await _apiService.buscarHistoricoDolar();
-    } catch (_) {
-      _historicoDolar = [];
-      erros.add('Dólar');
-    }
-
-    _carregando = false;
-
-    if (erros.isEmpty) {
-      _mensagemStatus = 'Dados atualizados diretamente pelas APIs.';
-    } else if (erros.length == 3) {
-      _mensagemStatus = 'Não foi possível acessar as APIs neste momento.';
-    } else {
       _mensagemStatus =
-          'Não foi possível atualizar: ${erros.join(', ')}.';
+          'Não foi possível acessar o servidor Go. Verifique se ele está em execução.';
+    } finally {
+      _carregando = false;
+      notifyListeners();
     }
-
-    notifyListeners();
   }
 
   void alterarTipoGrafico(TipoGrafico tipo) {
@@ -286,60 +382,22 @@ class ControleIndicadores extends ChangeNotifier {
     notifyListeners();
   }
 
-  void exportarRelatorioCsv() {
-    final linhas = <String>[
-      'Indicador;Data;Valor',
-    ];
-
-    for (final ponto in _historicoIpca) {
-      linhas.add(
-        'IPCA;${_formatarDataCsv(ponto.data)};${ponto.valor.toStringAsFixed(2)}%',
-      );
-    }
-
-    for (final ponto in _historicoSelic) {
-      linhas.add(
-        'Taxa Selic;${_formatarDataCsv(ponto.data)};${ponto.valor.toStringAsFixed(2)}%',
-      );
-    }
-
-    for (final ponto in _historicoDolar) {
-      linhas.add(
-        'Dólar;${_formatarDataCsv(ponto.data)};R\$ ${ponto.valor.toStringAsFixed(2).replaceAll('.', ',')}',
-      );
-    }
-
-    if (linhas.length == 1) {
-      _mensagemStatus = 'Não há dados de API disponíveis para exportação.';
-      notifyListeners();
-      return;
-    }
-
-    final conteudo = '\uFEFF${linhas.join('\n')}';
-    final arquivo = html.Blob(
-      [conteudo],
-      'text/csv;charset=utf-8',
-    );
-
-    final url = html.Url.createObjectUrlFromBlob(arquivo);
-
-    html.AnchorElement(href: url)
-      ..setAttribute(
-        'download',
-        'indicadores_financeiros_${DateTime.now().millisecondsSinceEpoch}.csv',
-      )
-      ..click();
-
-    html.Url.revokeObjectUrl(url);
-
-    _mensagemStatus = 'Arquivo CSV baixado com sucesso.';
+  Future<bool> exportarRelatorioCsv() async {
+    _mensagemStatus = 'Solicitando o relatório ao servidor Go...';
     notifyListeners();
-  }
 
-  String _formatarDataCsv(DateTime data) {
-    final dia = data.day.toString().padLeft(2, '0');
-    final mes = data.month.toString().padLeft(2, '0');
-    return '$dia/$mes/${data.year}';
+    try {
+      await _apiService.baixarCsv();
+
+      _mensagemStatus = 'Arquivo CSV baixado com sucesso.';
+      return true;
+    } catch (_) {
+      _mensagemStatus =
+          'Não foi possível gerar o arquivo CSV pelo servidor Go.';
+      return false;
+    } finally {
+      notifyListeners();
+    }
   }
 }
 
@@ -366,16 +424,26 @@ class AplicativoDashboard extends StatelessWidget {
 class TelaDashboard extends StatelessWidget {
   const TelaDashboard({super.key});
 
-  void _notificarExportacao(
+  Future<void> _notificarExportacao(
     BuildContext context,
     ControleIndicadores provedor,
-  ) {
-    provedor.exportarRelatorioCsv();
+  ) async {
+    final exportado = await provedor.exportarRelatorioCsv();
+
+    if (!context.mounted) {
+      return;
+    }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('O arquivo CSV foi gerado para download.'),
-        backgroundColor: Color(0xFFD2143A),
+      SnackBar(
+        content: Text(
+          exportado
+              ? 'O arquivo CSV foi gerado para download.'
+              : 'Não foi possível gerar o arquivo CSV.',
+        ),
+        backgroundColor: exportado
+            ? const Color(0xFF2E7D32)
+            : const Color(0xFFC62828),
       ),
     );
   }
@@ -427,7 +495,7 @@ class TelaDashboard extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               const Text(
-                'Dados obtidos diretamente por APIs públicas.',
+                'Dados obtidos pelo servidor em Go.',
                 style: TextStyle(color: Colors.grey),
               ),
               const SizedBox(height: 20),
@@ -443,7 +511,7 @@ class TelaDashboard extends StatelessWidget {
                 runSpacing: 12,
                 children: provedorDados.listaIndicadores.map((indicador) {
                   return SizedBox(
-                    width: 175,
+                    width: 220,
                     child: CartaoIndicador(indicador: indicador),
                   );
                 }).toList(),
@@ -519,8 +587,7 @@ class TelaDashboard extends StatelessWidget {
                   pontos: provedorDados.historicoSelecionado,
                   cor: provedorDados.corGrafico,
                   unidade: provedorDados.unidadeGrafico,
-                  linhaEmDegraus:
-                      provedorDados.tipoGrafico == TipoGrafico.selic,
+                  linhaEmDegraus: provedorDados.linhaEmDegraus,
                 ),
               ),
               const SizedBox(height: 30),
@@ -537,9 +604,7 @@ class TelaDashboard extends StatelessWidget {
                     provedorDados,
                   ),
                   icon: const Icon(Icons.file_download),
-                  label: const Text(
-                    'Exportar Dados em CSV',
-                  ),
+                  label: const Text('Exportar Dados em CSV'),
                 ),
               ),
             ],
@@ -560,13 +625,16 @@ class CartaoIndicador extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final indisponivel = indicador.nivelAlerta == 'indisponivel';
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: indicador.corTema.withOpacity(0.08),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: indicador.corTema.withOpacity(0.4),
+          color: indicador.corTema.withOpacity(0.5),
+          width: 1.3,
         ),
       ),
       child: Column(
@@ -589,11 +657,31 @@ class CartaoIndicador extends StatelessWidget {
           Text(
             indicador.valor,
             style: const TextStyle(
-              fontSize: 18,
+              fontSize: 20,
               fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 10),
+          if (!indisponivel)
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 4,
+              ),
+              decoration: BoxDecoration(
+                color: indicador.corTema,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                textoDoAlerta(indicador.nivelAlerta),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          const SizedBox(height: 8),
           Text(
             indicador.descricao,
             style: const TextStyle(
@@ -642,8 +730,15 @@ class GraficoHistorico extends StatelessWidget {
     }
 
     final valores = pontos.map((ponto) => ponto.valor).toList();
-    final menorValor = valores.reduce(math.min);
-    final maiorValor = valores.reduce(math.max);
+
+    final menorValor = valores
+        .reduce((atual, proximo) => math.min(atual, proximo))
+        .toDouble();
+
+    final maiorValor = valores
+        .reduce((atual, proximo) => math.max(atual, proximo))
+        .toDouble();
+
     final diferenca = maiorValor - menorValor;
     final margem = diferenca == 0 ? 1.0 : diferenca * 0.2;
     final minY = menorValor - margem;
@@ -686,7 +781,7 @@ class GraficoHistorico extends StatelessWidget {
             leftTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
-                reservedSize: 44,
+                reservedSize: 52,
                 interval: intervaloY,
                 getTitlesWidget: (valor, meta) {
                   return Text(
@@ -720,13 +815,13 @@ class GraficoHistorico extends StatelessWidget {
                   }
 
                   final ponto = pontos[indice];
-                  final dia = ponto.data.day.toString().padLeft(2, '0');
                   final mes = ponto.data.month.toString().padLeft(2, '0');
+                  final ano = ponto.data.year.toString().substring(2);
 
                   return Padding(
                     padding: const EdgeInsets.only(top: 8),
                     child: Text(
-                      '$dia/$mes',
+                      '$mes/$ano',
                       style: const TextStyle(
                         fontSize: 9,
                         color: Colors.grey,
@@ -742,6 +837,7 @@ class GraficoHistorico extends StatelessWidget {
               getTooltipItems: (pontosTocados) {
                 return pontosTocados.map((pontoTocado) {
                   final ponto = pontos[pontoTocado.spotIndex];
+
                   final dia = ponto.data.day.toString().padLeft(2, '0');
                   final mes = ponto.data.month.toString().padLeft(2, '0');
 
