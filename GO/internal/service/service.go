@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -20,29 +19,24 @@ import (
 	"dashboard-financas-go/internal/domain"
 )
 
-const (
-	ipcaURL = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados/ultimos/12?formato=json"
-
-	dollarURL = "https://economia.awesomeapi.com.br/json/daily/USD-BRL/360"
-)
-
 type Service struct {
-	client *http.Client
-	cache  *cache.Store
-	ttl    time.Duration
-	now    func() time.Time
+	client  *http.Client
+	cache   *cache.Store
+	ttl     time.Duration
+	rustURL string
 }
 
 func New(
 	client *http.Client,
 	store *cache.Store,
 	ttl time.Duration,
+	rustURL string,
 ) *Service {
 	return &Service{
-		client: client,
-		cache:  store,
-		ttl:    ttl,
-		now:    time.Now,
+		client:  client,
+		cache:   store,
+		ttl:     ttl,
+		rustURL: rustURL,
 	}
 }
 
@@ -263,6 +257,68 @@ func (s *Service) loadAll(
 	return ipca, selic, dollar, nil
 }
 
+type rustDados struct {
+	IPCA  []bcbRow     `json:"ipca"`
+	Selic []bcbRow     `json:"selic"`
+	Dolar []awesomeRow `json:"dolar"`
+}
+
+func (s *Service) fetchRustDados(ctx context.Context) (*rustDados, error) {
+	if cached, ok := cache.Get[*rustDados](s.cache, "rust:dados"); ok {
+		return cached, nil
+	}
+
+	request, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		s.rustURL+"/dados",
+		nil,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	response, err := s.client.Do(request)
+
+	if err != nil {
+		return nil, fmt.Errorf(
+			"requisição ao serviço Rust: %w",
+			err,
+		)
+	}
+
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf(
+			"serviço Rust respondeu com status %d",
+			response.StatusCode,
+		)
+	}
+
+	body, err := io.ReadAll(
+		io.LimitReader(response.Body, 4<<20),
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var dados rustDados
+
+	if err := json.Unmarshal(body, &dados); err != nil {
+		return nil, fmt.Errorf(
+			"JSON inválido do serviço Rust: %w",
+			err,
+		)
+	}
+
+	cache.Set(s.cache, "rust:dados", &dados, s.ttl)
+
+	return &dados, nil
+}
+
 func (s *Service) getIPCA(
 	ctx context.Context,
 ) ([]domain.HistoricalPoint, error) {
@@ -273,20 +329,23 @@ func (s *Service) getIPCA(
 		return cached, nil
 	}
 
-	points, err := s.fetchBCB(ctx, ipcaURL)
+	dados, err := s.fetchRustDados(ctx)
 
 	if err != nil {
 		return nil, err
 	}
 
+	points := parseBCBRows(dados.IPCA)
+
+	if len(points) == 0 {
+		return nil, errors.New(
+			"nenhum dado válido de IPCA recebido do serviço Rust",
+		)
+	}
+
 	points = lastN(points, 12)
 
-	cache.Set(
-		s.cache,
-		"history:ipca",
-		points,
-		s.ttl,
-	)
+	cache.Set(s.cache, "history:ipca", points, s.ttl)
 
 	return points, nil
 }
@@ -301,51 +360,24 @@ func (s *Service) getSelic(
 		return cached, nil
 	}
 
-	end := s.now()
-	start := end.AddDate(-2, 0, 0)
-
-	endpoint, err := url.Parse(
-		"https://api.bcb.gov.br/dados/serie/bcdata.sgs.1178/dados",
-	)
+	dados, err := s.fetchRustDados(ctx)
 
 	if err != nil {
 		return nil, err
 	}
 
-	query := endpoint.Query()
+	points := parseBCBRows(dados.Selic)
 
-	query.Set("formato", "json")
-
-	query.Set(
-		"dataInicial",
-		start.Format("02/01/2006"),
-	)
-
-	query.Set(
-		"dataFinal",
-		end.Format("02/01/2006"),
-	)
-
-	endpoint.RawQuery = query.Encode()
-
-	points, err := s.fetchBCB(
-		ctx,
-		endpoint.String(),
-	)
-
-	if err != nil {
-		return nil, err
+	if len(points) == 0 {
+		return nil, errors.New(
+			"nenhum dado válido de Selic recebido do serviço Rust",
+		)
 	}
 
 	points = lastValueByMonth(points)
 	points = lastN(points, 12)
 
-	cache.Set(
-		s.cache,
-		"history:selic",
-		points,
-		s.ttl,
-	)
+	cache.Set(s.cache, "history:selic", points, s.ttl)
 
 	return points, nil
 }
@@ -360,182 +392,50 @@ func (s *Service) getDollar(
 		return cached, nil
 	}
 
-	request, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodGet,
-		dollarURL,
-		nil,
-	)
+	dados, err := s.fetchRustDados(ctx)
 
 	if err != nil {
 		return nil, err
 	}
 
-	response, err := s.client.Do(request)
-
-	if err != nil {
-		return nil, fmt.Errorf(
-			"requisição à AwesomeAPI: %w",
-			err,
-		)
-	}
-
-	defer response.Body.Close()
-
-	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf(
-			"AwesomeAPI respondeu com status %d",
-			response.StatusCode,
-		)
-	}
-
-	body, err := io.ReadAll(
-		io.LimitReader(response.Body, 2<<20),
-	)
-
-	if err != nil {
-		return nil, err
-	}
-
-	var rows []awesomeRow
-
-	if err := json.Unmarshal(body, &rows); err != nil {
-		return nil, fmt.Errorf(
-			"JSON inválido da AwesomeAPI: %w",
-			err,
-		)
-	}
-
-	points := make(
-		[]domain.HistoricalPoint,
-		0,
-		len(rows),
-	)
-
-	for _, row := range rows {
-		timestamp, err := strconv.ParseInt(
-			row.Timestamp,
-			10,
-			64,
-		)
-
-		if err != nil {
-			continue
-		}
-
-		value, err := strconv.ParseFloat(
-			row.Bid,
-			64,
-		)
-
-		if err != nil {
-			continue
-		}
-
-		points = append(points, domain.HistoricalPoint{
-			Data: time.Unix(
-				timestamp,
-				0,
-			).UTC().Format("2006-01-02"),
-			Valor: value,
-		})
-	}
+	points := parseAwesomeRows(dados.Dolar)
 
 	if len(points) == 0 {
 		return nil, errors.New(
-			"nenhum dado válido de dólar foi recebido",
+			"nenhum dado válido de dólar recebido do serviço Rust",
 		)
 	}
-
-	sort.Slice(points, func(i, j int) bool {
-		return points[i].Data < points[j].Data
-	})
 
 	points = lastValueByMonth(points)
 	points = lastN(points, 12)
 
-	cache.Set(
-		s.cache,
-		"history:dolar",
-		points,
-		s.ttl,
-	)
+	cache.Set(s.cache, "history:dolar", points, s.ttl)
 
 	return points, nil
 }
 
-func (s *Service) fetchBCB(
-	ctx context.Context,
-	endpoint string,
-) ([]domain.HistoricalPoint, error) {
-	request, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodGet,
-		endpoint,
-		nil,
-	)
+type bcbRow struct {
+	Data  string `json:"data"`
+	Valor string `json:"valor"`
+}
 
-	if err != nil {
-		return nil, err
-	}
+type awesomeRow struct {
+	Timestamp string `json:"timestamp"`
+	Bid       string `json:"bid"`
+}
 
-	response, err := s.client.Do(request)
-
-	if err != nil {
-		return nil, fmt.Errorf(
-			"requisição ao Banco Central: %w",
-			err,
-		)
-	}
-
-	defer response.Body.Close()
-
-	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf(
-			"Banco Central respondeu com status %d",
-			response.StatusCode,
-		)
-	}
-
-	body, err := io.ReadAll(
-		io.LimitReader(response.Body, 2<<20),
-	)
-
-	if err != nil {
-		return nil, err
-	}
-
-	var rows []bcbRow
-
-	if err := json.Unmarshal(body, &rows); err != nil {
-		return nil, fmt.Errorf(
-			"JSON inválido do Banco Central: %w",
-			err,
-		)
-	}
-
-	points := make(
-		[]domain.HistoricalPoint,
-		0,
-		len(rows),
-	)
+func parseBCBRows(rows []bcbRow) []domain.HistoricalPoint {
+	points := make([]domain.HistoricalPoint, 0, len(rows))
 
 	for _, row := range rows {
-		date, err := time.Parse(
-			"02/01/2006",
-			row.Data,
-		)
+		date, err := time.Parse("02/01/2006", row.Data)
 
 		if err != nil {
 			continue
 		}
 
 		value, err := strconv.ParseFloat(
-			strings.ReplaceAll(
-				row.Valor,
-				",",
-				".",
-			),
+			strings.ReplaceAll(row.Valor, ",", "."),
 			64,
 		)
 
@@ -549,27 +449,40 @@ func (s *Service) fetchBCB(
 		})
 	}
 
-	if len(points) == 0 {
-		return nil, errors.New(
-			"nenhum dado válido foi recebido do Banco Central",
-		)
+	sort.Slice(points, func(i, j int) bool {
+		return points[i].Data < points[j].Data
+	})
+
+	return points
+}
+
+func parseAwesomeRows(rows []awesomeRow) []domain.HistoricalPoint {
+	points := make([]domain.HistoricalPoint, 0, len(rows))
+
+	for _, row := range rows {
+		timestamp, err := strconv.ParseInt(row.Timestamp, 10, 64)
+
+		if err != nil {
+			continue
+		}
+
+		value, err := strconv.ParseFloat(row.Bid, 64)
+
+		if err != nil {
+			continue
+		}
+
+		points = append(points, domain.HistoricalPoint{
+			Data:  time.Unix(timestamp, 0).UTC().Format("2006-01-02"),
+			Valor: value,
+		})
 	}
 
 	sort.Slice(points, func(i, j int) bool {
 		return points[i].Data < points[j].Data
 	})
 
-	return points, nil
-}
-
-type bcbRow struct {
-	Data  string `json:"data"`
-	Valor string `json:"valor"`
-}
-
-type awesomeRow struct {
-	Timestamp string `json:"timestamp"`
-	Bid       string `json:"bid"`
+	return points
 }
 
 func lastValueByMonth(

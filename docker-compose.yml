@@ -1,0 +1,33 @@
+services:
+  rust-fetcher:
+    build:
+      context: ./Rust
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+      Awesome_API_Key: "${AWESOME_API_KEY}"
+    restart: unless-stopped
+
+  go-api:
+    build:
+      context: ./GO
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      ALLOW_ORIGIN: "*"
+      CACHE_MINUTES: "5"
+      RUST_URL: "http://rust-fetcher:3000"
+    depends_on:
+      - rust-fetcher
+    restart: unless-stopped
+
+  flutter-web:
+    build:
+      context: ./Dart
+    ports:
+      - "80:80"
+    depends_on:
+      - go-api
+    restart: unless-stopped

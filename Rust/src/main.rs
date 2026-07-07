@@ -1,113 +1,104 @@
-use serde::{Deserialize, Serialize}; // transforma JSON em struct
-use std::env;
-use std::fs;
+use axum::{extract::State, http::StatusCode, routing::get, Json, Router};
+use chrono::Local;
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
+use std::{env, sync::Arc, time::Duration};
 
-#[derive(Debug, Deserialize, Serialize)]
-struct Registro {
+#[derive(Debug, Deserialize, Serialize, Clone)]
+struct BcbRow {
     data: String,
     valor: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-struct Moeda {
-    code: String,
-    codein: String,
-    name: String,
+#[derive(Debug, Deserialize, Serialize, Clone)]
+struct AwesomeRow {
+    timestamp: String,
     bid: String,
-    ask: String,
-    create_date: String,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-struct RespostaMoeda {
-    #[serde(rename = "USDBRL")]
-    usdbrl: Moeda,
-
-    #[serde(rename = "EURBRL")]
-    eurbrl: Moeda,
-
-    #[serde(rename = "EURUSD")]
-    eurusd: Moeda,
 }
 
 #[derive(Debug, Serialize)]
 struct DadosFinanceiros {
-    ipca: Vec<Registro>,
-    selic: Vec<Registro>,
-    moedas: RespostaMoeda,
+    ipca: Vec<BcbRow>,
+    selic: Vec<BcbRow>,
+    dolar: Vec<AwesomeRow>,
+}
+
+struct AppState {
+    client: Client,
+    api_key: Option<String>,
+}
+
+async fn health() -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "status": "ok",
+        "service": "rust-fetcher"
+    }))
+}
+
+async fn get_dados(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<DadosFinanceiros>, (StatusCode, String)> {
+    let today = Local::now();
+    let two_years_ago = today - chrono::Duration::days(730);
+    let selic_url = format!(
+        "https://api.bcb.gov.br/dados/serie/bcdata.sgs.1178/dados?formato=json&dataInicial={}&dataFinal={}",
+        two_years_ago.format("%d/%m/%Y"),
+        today.format("%d/%m/%Y"),
+    );
+
+    let dolar_url = match &state.api_key {
+        Some(key) => format!(
+            "https://economia.awesomeapi.com.br/json/daily/USD-BRL/360?token={}",
+            key
+        ),
+        None => "https://economia.awesomeapi.com.br/json/daily/USD-BRL/360".to_string(),
+    };
+
+    let (ipca, selic, dolar) = tokio::try_join!(
+        fetch_bcb(
+            &state.client,
+            "https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados/ultimos/12?formato=json",
+        ),
+        fetch_bcb(&state.client, &selic_url),
+        fetch_awesome(&state.client, &dolar_url),
+    )
+    .map_err(|e| (StatusCode::BAD_GATEWAY, e.to_string()))?;
+
+    Ok(Json(DadosFinanceiros { ipca, selic, dolar }))
+}
+
+async fn fetch_bcb(client: &Client, url: &str) -> Result<Vec<BcbRow>, reqwest::Error> {
+    client.get(url).send().await?.json::<Vec<BcbRow>>().await
+}
+
+async fn fetch_awesome(client: &Client, url: &str) -> Result<Vec<AwesomeRow>, reqwest::Error> {
+    client.get(url).send().await?.json::<Vec<AwesomeRow>>().await
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() {
     dotenvy::dotenv().ok();
 
-    let api_key = env::var("Awesome_API_Key")?;
+    let port = env::var("PORT").unwrap_or_else(|_| "3000".to_string());
 
-    let url_ipca = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados/ultimos/12?formato=json";
-    let resposta_ipca = reqwest::get(url_ipca).await?;
-    let dados_ipca = resposta_ipca.json::<Vec<Registro>>().await?;
+    let api_key = env::var("Awesome_API_Key").ok();
 
-    for item in &dados_ipca {
-        println!("IPCA Data: {} | Valor: {}", item.data, item.valor);
-    }
+    let state = Arc::new(AppState {
+        client: Client::builder()
+            .timeout(Duration::from_secs(30))
+            .build()
+            .unwrap(),
+        api_key,
+    });
 
-    let url_selic = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.432/dados/ultimos/12?formato=json";
-    let resposta_selic = reqwest::get(url_selic).await?;
-    let dados_selic = resposta_selic.json::<Vec<Registro>>().await?;
+    let app = Router::new()
+        .route("/health", get(health))
+        .route("/dados", get(get_dados))
+        .with_state(state);
 
-    for item in &dados_selic {
-        println!("Selic Data: {} | Valor: {}", item.data, item.valor);
-    }
+    let addr = format!("0.0.0.0:{}", port);
+    println!("Rust fetcher escutando em {}", addr);
 
-    let url_moedas = format!(
-        "https://economia.awesomeapi.com.br/json/last/USD-BRL,EUR-BRL,EUR-USD?token={}",
-        api_key
-    );
-
-    let resposta_moedas = reqwest::get(&url_moedas).await?;
-    let dados_moeda = resposta_moedas.json::<RespostaMoeda>().await?;
-
-    println!(
-        "Moeda: {}/{} | Nome: {} | Compra: {} | Venda: {} | Atualizado em: {}",
-        dados_moeda.usdbrl.code,
-        dados_moeda.usdbrl.codein,
-        dados_moeda.usdbrl.name,
-        dados_moeda.usdbrl.bid,
-        dados_moeda.usdbrl.ask,
-        dados_moeda.usdbrl.create_date
-    );
-
-    println!(
-        "Moeda: {}/{} | Nome: {} | Compra: {} | Venda: {} | Atualizado em: {}",
-        dados_moeda.eurbrl.code,
-        dados_moeda.eurbrl.codein,
-        dados_moeda.eurbrl.name,
-        dados_moeda.eurbrl.bid,
-        dados_moeda.eurbrl.ask,
-        dados_moeda.eurbrl.create_date
-    );
-
-    println!(
-        "Moeda: {}/{} | Nome: {} | Compra: {} | Venda: {} | Atualizado em: {}",
-        dados_moeda.eurusd.code,
-        dados_moeda.eurusd.codein,
-        dados_moeda.eurusd.name,
-        dados_moeda.eurusd.bid,
-        dados_moeda.eurusd.ask,
-        dados_moeda.eurusd.create_date
-    );
-
-    let dados_financeiros = DadosFinanceiros {
-        ipca: dados_ipca,
-        selic: dados_selic,
-        moedas: dados_moeda,
-    };
-
-    let json = serde_json::to_string_pretty(&dados_financeiros)?;
-
-    fs::write("dados.json", json)?;
-
-    println!("Arquivo dados.json gerado com sucesso!");
-
-    Ok(())
+    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+    axum::serve(listener, app).await.unwrap();
 }
