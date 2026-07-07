@@ -51,3 +51,13 @@ func exportCSVHandler(w http.ResponseWriter, r *http.Request) {
 		writer.Write(linha)
 	}
 }
+
+func main() {
+	http.HandleFunc("/api/indicadores", getIndicadoresHandler)
+	http.HandleFunc("/api/exportar", exportCSVHandler)
+
+	// Inicia o servidor na porta 8080
+	if err := http.ListenAndServe(":8080", nil); err != nil {
+		fmt.Println("Erro ao iniciar servidor:", err)
+	}
+}
