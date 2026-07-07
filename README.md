@@ -34,43 +34,29 @@ O código está organizado em domínios isolados para facilitar a manutenção:
 
 * `/Rust/`: Aplicação de coleta de dados e manifestos Cargo.
 * `/GO/`: Lógica de roteamento web e serviços REST.
-* `/Dart/`: Componentes visuais e controle de estado do aplicativo Flutter.
+* `/Dart/`: Componentes visuais, controle de estado do aplicativo Flutter e configurações do servidor web (Nginx).
 
 ---
 
 ## 🐳 Como Executar o Projeto
 
-O backend do projeto (Rust e Go) foi conteinerizado utilizando **Docker** para garantir a consistência do ambiente de desenvolvimento e facilitar o *deploy*.
+Todo o ecossistema do projeto (Rust, Go e Dart) foi inteiramente conteinerizado utilizando **Docker**. Isso garante que o ambiente de execução seja idêntico para qualquer desenvolvedor ou servidor, dispensando a instalação local de compiladores ou SDKs.
 
 **Pré-requisitos:**
-* [Docker](https://docs.docker.com/get-docker/) e [Docker Compose](https://docs.docker.com/compose/install/) instalados.
-* [Flutter SDK](https://docs.flutter.dev/get-started/install) instalado (para rodar o frontend).
+* [Docker](https://docs.docker.com/get-docker/) e [Docker Compose](https://docs.docker.com/compose/install/) instalados na sua máquina.
 
 **Passo a passo:**
 
 1. Clone este repositório para sua máquina local.
 2. Navegue até a raiz do projeto (onde está localizado o arquivo `docker-compose.yml`).
-3. Suba os serviços de backend executando o comando abaixo:
-```bash
-docker-compose up --build -d
-
-```
-
-4. Verifique se os containers subiram corretamente e se a API está respondendo.
-5. Em um novo terminal, navegue até a pasta do frontend:
-
-```bash
-cd Dart
-
-```
-
-6. Instale as dependências do Flutter e execute o aplicativo:
-
-```bash
-flutter pub get
-flutter run
-
-```
+3. Suba todos os serviços executando o comando abaixo:
+   
+   ```bash
+   docker compose up -d --build
+   
+4. Aguarde a construção das imagens e a inicialização dos containers.
+5. Abra o seu navegador e acesse:
+**[http://localhost:80](https://www.google.com/search?q=http://localhost:80)**
 
 ---
 
