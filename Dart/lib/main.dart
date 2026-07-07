@@ -33,7 +33,7 @@ class ControleIndicadores extends ChangeNotifier {
     IndicadorEconomico(
       titulo: 'IPCA',
       valor: '4,5%',
-      corTema: Colors.pink.shade700,
+      corTema: Colors.pink,
       icone: Icons.trending_up,
       descricao: 'Índice oficial da inflação.',
     ),
@@ -57,9 +57,7 @@ class ControleIndicadores extends ChangeNotifier {
   bool _exportando = false;
 
   List<IndicadorEconomico> get listaIndicadores => _dadosIndicadores;
-
   String get mensagemStatus => _mensagemStatus;
-
   bool get exportando => _exportando;
 
   void exportarRelatorioCSV() {
@@ -162,14 +160,12 @@ class TelaDashboard extends StatelessWidget {
             Wrap(
               spacing: 10,
               runSpacing: 10,
-              children: provedorDados.listaIndicadores
-                  .map(
-                    (item) => SizedBox(
-                      width: 170,
-                      child: CartaoIndicador(indicador: item),
-                    ),
-                  )
-                  .toList(),
+              children: provedorDados.listaIndicadores.map((item) {
+                return SizedBox(
+                  width: 170,
+                  child: CartaoIndicador(indicador: item),
+                );
+              }).toList(),
             ),
 
             const SizedBox(height: 24),
@@ -193,7 +189,9 @@ class TelaDashboard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       provedorDados.mensagemStatus,
-                      style: const TextStyle(fontWeight: FontWeight.w500),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                 ],
@@ -204,7 +202,7 @@ class TelaDashboard extends StatelessWidget {
 
             const Text(
               'Histórico de Variação',
-              style: TextStyle
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
               ),
@@ -305,10 +303,10 @@ class CartaoIndicador extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: indicador.corTema.withValues(alpha: 0.08),
+        color: indicador.corTema.withOpacity(0.08),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: indicador.corTema.withValues(alpha: 0.4),
+          color: indicador.corTema.withOpacity(0.4),
         ),
       ),
       child: Column(
