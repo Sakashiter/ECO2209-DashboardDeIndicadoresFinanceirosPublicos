@@ -82,5 +82,3 @@ flutter run
 * Otávio Lima de Andrade
 
 **Docente responsável:** Prof. Walter Aoiama Nagai
-
-```
