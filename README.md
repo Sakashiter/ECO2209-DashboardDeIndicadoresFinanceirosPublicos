@@ -36,17 +36,17 @@ O ecossistema segue uma separação rigorosa de responsabilidades técnicas por 
 A organização de pastas do repositório foi padronizada conforme a seguinte árvore de diretórios:
 
 ```text
-[cite_start]├── Dart/               # Aplicação Flutter para visualização e interface gráfica [cite: 509]
+├── Dart/               # Aplicação Flutter para visualização e interface gráfica
 │   ├── lib/main.dart   # Ponto de entrada do frontend
 │   └── pubspec.yaml    # Gerenciador de dependências do Dart
-[cite_start]├── GO/                 # Servidor de orquestração e API REST em Go [cite: 509]
+├── GO/                 # Servidor de orquestração e API REST em Go
 │   └── Documentação/   # Notas de especificação das rotas e endpoints
-[cite_start]├── Rust/               # Módulo de ingestão e parsing de dados em Rust [cite: 508]
+├── Rust/               # Módulo de ingestão e parsing de dados em Rust 
 │   ├── src/main.rs     # Script assíncrono de coleta das APIs
 │   ├── Cargo.toml      # Manifesto de configuração do Cargo
 │   └── Cargo.lock      # Travamento de versões de dependências
-[cite_start]├── docs/               # Documentos e apresentações do projeto (LaTeX, PDFs) [cite: 510]
-[cite_start]└── .gitignore          # Arquivo de omissão de artefatos de compilação e chaves locais [cite: 192]
+├── docs/               # Documentos e apresentações do projeto (LaTeX, PDFs) 
+└── .gitignore          # Arquivo de omissão de artefatos de compilação e chaves locais
 
 ```
 
