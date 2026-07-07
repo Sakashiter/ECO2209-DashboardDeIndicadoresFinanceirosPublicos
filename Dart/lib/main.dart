@@ -1,52 +1,84 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-
-//iniciando
 void main() {
   runApp(
     ChangeNotifierProvider(
       create: (context) => ControleIndicadores(),
-      builder: (context, child) => const AplicativoDashboard(),
+      child: const AplicativoDashboard(),
     ),
   );
 }
 
-//Modelo (ficha em branco)
-
+// Modelo de dados de cada indicador econômico
 class IndicadorEconomico {
   final String titulo;
   final String valor;
   final Color corTema;
+  final IconData icone;
+  final String descricao;
 
   IndicadorEconomico({
-    required this.titulo, 
-    required this.valor, 
+    required this.titulo,
+    required this.valor,
     required this.corTema,
+    required this.icone,
+    required this.descricao,
   });
 }
 
-//Provider e Observer
-
+// Provider responsável pelo controle dos indicadores
 class ControleIndicadores extends ChangeNotifier {
-  // Lista de dados simulados com paleta de cores
   final List<IndicadorEconomico> _dadosIndicadores = [
-    IndicadorEconomico(titulo: 'IPCA (Inflação)', valor: '4,5%', corTema: Colors.pink.shade700),
-    IndicadorEconomico(titulo: 'Taxa SELIC', valor: '10,5%', corTema: const Color(0xFFD2143A)), // Rosa Escuro / Carmim
-    IndicadorEconomico(titulo: 'Dólar (Câmbio)', valor: 'R\$ 5,25', corTema: const Color(0xFFE05275)), // Rosa Médio
+    IndicadorEconomico(
+      titulo: 'IPCA',
+      valor: '4,5%',
+      corTema: Colors.pink.shade700,
+      icone: Icons.trending_up,
+      descricao: 'Índice oficial da inflação.',
+    ),
+    IndicadorEconomico(
+      titulo: 'Taxa SELIC',
+      valor: '10,5%',
+      corTema: const Color(0xFFD2143A),
+      icone: Icons.account_balance,
+      descricao: 'Taxa básica de juros.',
+    ),
+    IndicadorEconomico(
+      titulo: 'Dólar',
+      valor: 'R\$ 5,25',
+      corTema: const Color(0xFFE05275),
+      icone: Icons.attach_money,
+      descricao: 'Cotação comercial simulada.',
+    ),
   ];
 
-  //Getter (protege o encapsulamento da original)
-  List<IndicadorEconomico> get listaIndicadores => _dadosIndicadores; //porta trancada, ninguém de fora pode alterar o valor
+  String _mensagemStatus = 'Dados atualizados com informações simuladas.';
+  bool _exportando = false;
 
-  //Método simulado (Vou implementar o http para a api)
+  List<IndicadorEconomico> get listaIndicadores => _dadosIndicadores;
+
+  String get mensagemStatus => _mensagemStatus;
+
+  bool get exportando => _exportando;
+
   void exportarRelatorioCSV() {
+    _exportando = true;
+    _mensagemStatus = 'Gerando relatório mensal em CSV...';
+    notifyListeners();
+
+    Future.delayed(const Duration(seconds: 1), () {
+      _exportando = false;
+      _mensagemStatus = 'Relatório CSV exportado com sucesso!';
+      notifyListeners();
+    });
+  }
+
+  void atualizarDados() {
+    _mensagemStatus = 'Indicadores atualizados com sucesso!';
     notifyListeners();
   }
 }
-
-
-// Iniciação da interface (escolha de cor(rosa))
 
 class AplicativoDashboard extends StatelessWidget {
   const AplicativoDashboard({super.key});
@@ -55,28 +87,26 @@ class AplicativoDashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      title: 'Dashboard Financeiro Público',
       theme: ThemeData(
+        useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFFE05275),
           brightness: Brightness.light,
         ),
-        useMaterial3: true,
       ),
       home: const TelaDashboard(),
     );
   }
 }
 
-// Tela principal
-
 class TelaDashboard extends StatelessWidget {
   const TelaDashboard({super.key});
 
-  // Função que mostra o feedback visual
-  void _notificarExportacao(BuildContext contexto) {
-    ScaffoldMessenger.of(contexto).showSnackBar(
+  void _notificarExportacao(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text(' Bars Exportação para CSV concluída com sucesso!'), 
+        content: Text('Exportação para CSV concluída com sucesso!'),
         backgroundColor: Color(0xFFD2143A),
       ),
     );
@@ -84,96 +114,177 @@ class TelaDashboard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Consumindo o estado global através do Provider (Injeção de Dependência)
-    final provedorDados = Provider.of<ControleIndicadores>(context); //tela não cria os dados, ela só "pede emprestado"
+    final provedorDados = Provider.of<ControleIndicadores>(context);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'Dashboard de Indicadores Públicos', 
+          'Dashboard de Indicadores Públicos',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        // Colocar cor rosa
         backgroundColor: Theme.of(context).colorScheme.primaryContainer,
         foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
         actions: [
           IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Atualizar indicadores',
+            onPressed: provedorDados.atualizarDados,
+          ),
+          IconButton(
             icon: const Icon(Icons.download),
             tooltip: 'Exportar CSV',
-            onPressed: () => _notificarExportacao(context),
+            onPressed: () {
+              provedorDados.exportarRelatorioCSV();
+              _notificarExportacao(context);
+            },
           ),
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Bem-vinda, Mariana', 
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              'Visão geral dos indicadores',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
             ),
+            const SizedBox(height: 4),
             const Text(
-              'Análise econômica dos últimos 12 meses', 
+              'Análise econômica dos últimos 12 meses',
               style: TextStyle(color: Colors.grey),
             ),
             const SizedBox(height: 20),
-            
-            // Renderização dinâmica (map) 
-            Row(
+
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
               children: provedorDados.listaIndicadores
-                  .map<Widget>((item) => CartaoIndicador(indicador: item)) 
+                  .map(
+                    (item) => SizedBox(
+                      width: 170,
+                      child: CartaoIndicador(indicador: item),
+                    ),
+                  )
                   .toList(),
             ),
-//pega a sua lista do estoque e lê item por item            
+
+            const SizedBox(height: 24),
+
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.secondaryContainer,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    provedorDados.exportando
+                        ? Icons.hourglass_top
+                        : Icons.info_outline,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      provedorDados.mensagemStatus,
+                      style: const TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
             const SizedBox(height: 30),
+
             const Text(
-              'Histórico de Variação', 
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              'Histórico de Variação',
+              style: TextStyle
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             const SizedBox(height: 10),
-            
-            //onde o gráfico real vai ficar quando o sistema estiver pronto
+
             Container(
               height: 250,
               width: double.infinity,
               decoration: BoxDecoration(
-                color: const Color(0xFFFFF0F3), 
+                color: const Color(0xFFFFF0F3),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFFFCCD5)),
+                border: Border.all(
+                  color: const Color(0xFFFFCCD5),
+                ),
               ),
               child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.show_chart, size: 64, color: Theme.of(context).colorScheme.primary),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Gráfico Histórico Interativo', 
-                      style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary),
+                    Icon(
+                      Icons.show_chart,
+                      size: 64,
+                      color: Theme.of(context).colorScheme.primary,
                     ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Gráfico Histórico Interativo',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
                     const Text(
-                      'Dados simulados das APIs BACEN / AwesomeAPI', 
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                      'Área preparada para integração futura com a API.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey,
+                      ),
                     ),
                   ],
                 ),
               ),
             ),
-            
-            const SizedBox(height: 30), //visual caixa
+
+            const SizedBox(height: 30),
+
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Theme.of(context).colorScheme.primary,
                   foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
-                onPressed: () => _notificarExportacao(context),
-                icon: const Icon(Icons.file_download),
-                label: const Text('Exportar Relatório Mensal (CSV)'),
+                onPressed: provedorDados.exportando
+                    ? null
+                    : () {
+                        provedorDados.exportarRelatorioCSV();
+                        _notificarExportacao(context);
+                      },
+                icon: provedorDados.exportando
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.file_download),
+                label: Text(
+                  provedorDados.exportando
+                      ? 'Exportando relatório...'
+                      : 'Exportar Relatório Mensal (CSV)',
+                ),
               ),
-            )
+            ),
           ],
         ),
       ),
@@ -181,39 +292,58 @@ class TelaDashboard extends StatelessWidget {
   }
 }
 
-// (componente reutilizável - desenho dos quadradinhos)
-
 class CartaoIndicador extends StatelessWidget {
   final IndicadorEconomico indicador;
 
-  const CartaoIndicador({super.key, required this.indicador});
+  const CartaoIndicador({
+    super.key,
+    required this.indicador,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          // Opacidade da cor
-          color: indicador.corTema.withValues(alpha: 0.08),
-borderRadius: BorderRadius.circular(12),
-border: Border.all(color: indicador.corTema.withValues(alpha: 0.4)),
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: indicador.corTema.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: indicador.corTema.withValues(alpha: 0.4),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              indicador.titulo, 
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: indicador.corTema),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            indicador.icone,
+            color: indicador.corTema,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            indicador.titulo,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: indicador.corTema,
             ),
-            const SizedBox(height: 8),
-            Text(
-              indicador.valor, 
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            indicador.valor,
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            indicador.descricao,
+            style: const TextStyle(
+              fontSize: 11,
+              color: Colors.grey,
+            ),
+          ),
+        ],
       ),
     );
   }
